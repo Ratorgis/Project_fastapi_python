@@ -1,6 +1,9 @@
-from fastapi import FastAPI, Response, HTTPException, status
+import time
+from fastapi import FastAPI, Request, Response, HTTPException, status
 from pydantic import BaseModel
+from loguru import logger
 
+from utils.strings import link_valid, auto_complete_link
 from service.link_service import LinkService
 
 class LinkRequest(BaseModel):
@@ -13,8 +16,21 @@ def create_app() -> FastAPI:
     app = FastAPI()
     link_service = LinkService()
 
+    @app.middleware('http')
+    async def add_process_time_header(request: Request, call_next) -> Response:
+        t0 = time.time()
+        response: Response = await call_next(request)
+        elapse_ms = round((time.time() - t0) * 1000, 2)
+        response.headers["X-Latency"] = str(elapse_ms + 'ms')
+
     @app.post("/link")
     def create_link(payload: LinkRequest) -> LinkResponse:
+        payload.link = auto_complete_link(payload.link)
+        if not link_valid(payload.link):
+            raise HTTPException(
+                status_code = status.HTTP_422_UNPROCESSABLE_CONTENT,
+                detail = 'not valid link to request'
+            )
         short_link = link_service.create_link(payload.link)
 
         return LinkResponse(short_link = f'http://localhost:8000/{short_link}')
