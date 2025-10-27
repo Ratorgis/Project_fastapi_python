@@ -18,11 +18,15 @@ def create_app() -> FastAPI:
 
     @app.middleware('http')
     async def add_process_time_header(request: Request, call_next) -> Response:
-        t0 = time.time()
-        response: Response = await call_next(request)
-        elapse_ms = round((time.time() - t0) * 1000, 2)
-        response.headers["X-Latency"] = str(elapse_ms + 'ms')
-
+        try:
+            t0 = time.time()
+            response: Response = await call_next(request)
+            elapse_ms = round((time.time() - t0) * 1000, 2)
+            response.headers["X-Latency"] = f"{elapse_ms} ms"
+            return response
+        except Exception:
+            logger.exception("failed to read body")
+            return Response(status_code = status.HTTP_400_BAD_REQUEST)
     @app.post("/link")
     def create_link(payload: LinkRequest) -> LinkResponse:
         payload.link = auto_complete_link(payload.link)
@@ -50,3 +54,5 @@ def create_app() -> FastAPI:
         )
 
     return app 
+
+
